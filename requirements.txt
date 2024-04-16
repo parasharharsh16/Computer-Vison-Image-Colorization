@@ -1,4 +1,8 @@
 opencv-python
 numpy
 matplotlib
-ipython
+ipykernel
+pandas
+torch
+torchvision
+torchaudio

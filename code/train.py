@@ -2,7 +2,7 @@ from utills import train_model, ClassBalancedLoss, create_color_weights, Graysca
 import torch
 import os
 from torch.utils.data import DataLoader
-from constants import data_dir, csv_path, data_percentage, mode, image_shape
+from constants import data_dir, csv_path, data_percentage, mode, image_shape,batch_size
 from dataprep import (sample_data,
                       write_images_to_csv_with_pandas,
                       CustomDataset)
@@ -11,8 +11,7 @@ from eccv16 import eccv16
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Hyperparameters
-num_epochs = 10
-batch_size = 32
+num_epochs = 5
 learning_rate = 0.01
 write_images_to_csv_with_pandas(data_dir, csv_path)
 if not os.path.exists(csv_path):
@@ -21,7 +20,7 @@ train_df = sample_data(csv_path, "train", data_percentage)
 val_df = sample_data(csv_path, "train", data_percentage)
 # test_df = sample_data(csv_path, "train", data_percentage)
 train_dataset = CustomDataset(train_df, resize=image_shape)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 print("ok")
 
 

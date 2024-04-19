@@ -96,7 +96,7 @@ def train_model(model, train_loader, optimizer, criterion, num_epochs,device):
             optimizer.step()
             progress_bar.set_description(f"Epoch {epoch+1} Iter {i+1}: loss {loss.item():.5f}")
             # Print training progress (optional)
-            if (i + 1) % log_interval == 0:
-                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {loss.item():.4f}')
+            # if (i + 1) % log_interval == 0:
+            #     print(f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {loss.item():.4f}')
 
 

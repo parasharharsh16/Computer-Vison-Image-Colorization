@@ -32,7 +32,7 @@ def write_images_to_csv_with_pandas(base_path, csv_filename):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, dataframe, transform=None, resize=None):
+    def __init__(self, dataframe, transform=True, resize=None):
         """
         Args:
             dataframe (DataFrame): DataFrame containing the image paths.
@@ -45,6 +45,10 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.data_frame)
+    
+    def transform_image(self, image):
+        normalized_image = image / 255.0
+        return normalized_image
 
     def __getitem__(self, idx):
         img_path = self.data_frame.iloc[idx, 0]
@@ -66,9 +70,9 @@ class CustomDataset(Dataset):
         image_gray = cv2.cvtColor(image_color, cv2.COLOR_BGR2GRAY)
 
         # # Apply transformations if provided
-        # if self.transform:
-        #     image_lab = self.transform(image_lab)
-        #     image_gray = self.transform(image_gray)
+        if self.transform:
+            image_lab = self.transform_image(image_lab)
+            image_gray = self.transform_image(image_gray)
 
         # Convert numpy arrays to tensors
         image_lab_tensor = (

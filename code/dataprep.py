@@ -32,22 +32,14 @@ def write_images_to_csv_with_pandas(base_path, csv_filename):
 
 
 class CustomDataset(Dataset):
-    def __init__(
-        self, csv_file, data_percentage, mode="train", transform=None, resize=None
-    ):
+    def __init__(self, dataframe, transform=None, resize=None):
         """
         Args:
-            csv_file (string): Path to the CSV file with image paths.
-            data_percentage (float): Percentage of data to sample (0-1).
-            mode (string): 'train' for training data, 'test' for testing data.
+            dataframe (DataFrame): DataFrame containing the image paths.
             transform (callable, optional): Optional transform to be applied on a sample.
             resize (tuple, optional): Desired size (width, height) to resize the image.
         """
-        self.data_frame = pd.read_csv(csv_file)
-        # Sample the data based on the given percentage
-        self.data_frame = self.data_frame.sample(frac=data_percentage)
-        # Filter the data based on the mode
-        self.data_frame = self.data_frame[self.data_frame["test_train"] == mode]
+        self.data_frame = dataframe
         self.transform = transform
         self.resize = resize
 
@@ -57,8 +49,13 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.data_frame.iloc[idx, 0]
 
-        # Read the image in color using cv2
+        # Load the image in color
         image_color = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        if image_color is None:
+            raise FileNotFoundError(
+                f"The image at path {img_path} could not be loaded."
+            )
+
         # Resize the color image if resize dimensions are provided
         if self.resize:
             image_color = cv2.resize(image_color, self.resize)
@@ -66,33 +63,81 @@ class CustomDataset(Dataset):
         # Convert the color image to Lab color space
         image_lab = cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab)
 
-        # Read the image in grayscale using cv2
+        # Load the image in grayscale
         image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        if image_gray is None:
+            raise FileNotFoundError(
+                f"The image at path {img_path} could not be loaded."
+            )
+
         # Resize the grayscale image if resize dimensions are provided
         if self.resize:
             image_gray = cv2.resize(image_gray, self.resize)
 
-        # If any transformations are to be applied, apply them here
+        # Apply transformations if provided
         if self.transform:
             image_lab = self.transform(image_lab)
             image_gray = self.transform(image_gray)
 
         # Convert numpy arrays to tensors
-        image_lab_tensor = torch.from_numpy(image_lab).permute(2, 0, 1).float()
+        image_lab_tensor = (
+            torch.from_numpy(image_lab).permute(2, 0, 1).float()
+        )  # Reorder dimensions for Lab
         image_gray_tensor = (
             torch.from_numpy(image_gray).unsqueeze(0).float()
-        )  # Add channel dimension
+        )  # Add channel dimension for grayscale
 
         return image_lab_tensor, image_gray_tensor
+
+
+def sample_data(file_path, data_type, sample_percentage):
+    """
+    Load data from a CSV file, filter by type, shuffle, and sample a percentage of it.
+
+    Parameters:
+        file_path (str): Path to the CSV file.
+        data_type (str): Type of data to filter ('train' or 'test').
+        sample_percentage (float): Percentage of the data to sample (e.g., 0.1 for 10%).
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the sampled data.
+    """
+    # Load the data
+    data = pd.read_csv(file_path)
+
+    # Shuffle the data
+    shuffled_data = data.sample(frac=1, random_state=22).reset_index(drop=True)
+    # Sample a percentage of the data
+    sampled_data = shuffled_data.sample(frac=sample_percentage, random_state=22)
+
+    if data_type == "train":
+        filtered_data = sampled_data[sampled_data["test_train"] == data_type]
+        final_data = filtered_data.sample(frac=0.8, random_state=22)
+    elif data_type == "val":
+        filtered_data = sampled_data[sampled_data["test_train"] == "train"]
+        final_data = filtered_data.sample(frac=0.2, random_state=22)
+    elif data_type == "test":
+        final_data = sampled_data[sampled_data["test_train"] == data_type]
+    return final_data
 
 
 if __name__ == "__main__":
     write_images_to_csv_with_pandas(data_dir, csv_path)
     if not os.path.exists(csv_path):
         raise Exception("csv file with paths are not present")
-    dataset = CustomDataset(
-        csv_file=csv_path,
-        data_percentage=data_percentage,
-        mode=mode,
-        resize=image_shape,
-    )
+    train_df = sample_data(csv_path, "train", data_percentage)
+    val_df = sample_data(csv_path, "train", data_percentage)
+    # test_df = sample_data(csv_path, "train", data_percentage)
+    train_dataset = CustomDataset(train_df, resize=image_shape)
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    print("ok")
+    # val_dataset = CustomDataset(
+    #     val_df,
+    #     resize=image_shape,
+    # )
+    # val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True)
+    # test_dataset = CustomDataset(
+    #     test_df,
+    #     resize=image_shape,
+    # )
+    # test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)

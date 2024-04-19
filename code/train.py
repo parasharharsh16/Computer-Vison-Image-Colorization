@@ -1,4 +1,4 @@
-from utills import train_model, ClassBalancedLoss, create_color_weights, GrayscaleToColorCNN
+from utills import train_model,predict,plot_images, ClassBalancedLoss, create_color_weights, GrayscaleToColorCNN
 import torch
 import os
 from torch.utils.data import DataLoader
@@ -17,10 +17,13 @@ write_images_to_csv_with_pandas(data_dir, csv_path)
 if not os.path.exists(csv_path):
     raise Exception("csv file with paths are not present")
 train_df = sample_data(csv_path, "train", data_percentage)
-val_df = sample_data(csv_path, "train", data_percentage)
+val_df = sample_data(csv_path, "val", data_percentage)
+test_df = sample_data(csv_path, "test", data_percentage)
 # test_df = sample_data(csv_path, "train", data_percentage)
 train_dataset = CustomDataset(train_df, resize=image_shape)
+test_dataset = CustomDataset(test_df, resize=image_shape)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+test_loader =  DataLoader(test_dataset,batch_size=1,shuffle=True)
 print("ok")
 
 
@@ -40,4 +43,12 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 criterion = torch.nn.MSELoss()
 
 # Train the model
-train_model(model, train_loader, optimizer, criterion, num_epochs,device)
+#model = train_model(model, train_loader, optimizer, criterion, num_epochs,device)
+model.load_state_dict(torch.load("model.pth"))
+test_output = predict(model,test_loader,device)
+
+plot_images(*test_output[0])
+plot_images(*test_output[1])
+plot_images(*test_output[2])
+plot_images(*test_output[3])
+plot_images(*test_output[4])

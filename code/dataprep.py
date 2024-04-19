@@ -46,10 +46,13 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.data_frame)
     
-    def transform_image(self, image):
+    def normalize_gray(self, image):
         normalized_image = image / 255.0
         return normalized_image
-
+    def normalize_lab(self, lab_image):
+        lab_image[..., 0] = (lab_image[..., 0] * 100) / 255
+        lab_image[..., 1:] = lab_image[..., 1:] - 128
+        return lab_image
     def __getitem__(self, idx):
         img_path = self.data_frame.iloc[idx, 0]
 
@@ -71,8 +74,8 @@ class CustomDataset(Dataset):
 
         # # Apply transformations if provided
         if self.transform:
-            image_lab = self.transform_image(image_lab)
-            image_gray = self.transform_image(image_gray)
+            image_lab = self.normalize_lab(image_lab)
+            image_gray = self.normalize_gray(image_gray)
 
         # Convert numpy arrays to tensors
         image_lab_tensor = (

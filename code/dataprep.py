@@ -55,8 +55,7 @@ class CustomDataset(Dataset):
             raise FileNotFoundError(
                 f"The image at path {img_path} could not be loaded."
             )
-
-        # Resize the color image if resize dimensions are provided
+        # Resize the grayscale image if resize dimensions are provided
         if self.resize:
             image_color = cv2.resize(image_color, self.resize)
 
@@ -64,20 +63,12 @@ class CustomDataset(Dataset):
         image_lab = cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab)
 
         # Load the image in grayscale
-        image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        if image_gray is None:
-            raise FileNotFoundError(
-                f"The image at path {img_path} could not be loaded."
-            )
+        image_gray = cv2.cvtColor(image_color, cv2.COLOR_BGR2GRAY)
 
-        # Resize the grayscale image if resize dimensions are provided
-        if self.resize:
-            image_gray = cv2.resize(image_gray, self.resize)
-
-        # Apply transformations if provided
-        if self.transform:
-            image_lab = self.transform(image_lab)
-            image_gray = self.transform(image_gray)
+        # # Apply transformations if provided
+        # if self.transform:
+        #     image_lab = self.transform(image_lab)
+        #     image_gray = self.transform(image_gray)
 
         # Convert numpy arrays to tensors
         image_lab_tensor = (
@@ -121,16 +112,16 @@ def sample_data(file_path, data_type, sample_percentage):
     return final_data
 
 
-if __name__ == "__main__":
-    write_images_to_csv_with_pandas(data_dir, csv_path)
-    if not os.path.exists(csv_path):
-        raise Exception("csv file with paths are not present")
-    train_df = sample_data(csv_path, "train", data_percentage)
-    val_df = sample_data(csv_path, "train", data_percentage)
-    # test_df = sample_data(csv_path, "train", data_percentage)
-    train_dataset = CustomDataset(train_df, resize=image_shape)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    print("ok")
+# if __name__ == "__main__":
+#     write_images_to_csv_with_pandas(data_dir, csv_path)
+#     if not os.path.exists(csv_path):
+#         raise Exception("csv file with paths are not present")
+#     train_df = sample_data(csv_path, "train", data_percentage)
+#     val_df = sample_data(csv_path, "train", data_percentage)
+#     # test_df = sample_data(csv_path, "train", data_percentage)
+#     train_dataset = CustomDataset(train_df, resize=image_shape)
+#     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+#     print("ok")
     # val_dataset = CustomDataset(
     #     val_df,
     #     resize=image_shape,

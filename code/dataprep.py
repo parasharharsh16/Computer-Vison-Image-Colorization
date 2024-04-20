@@ -47,7 +47,7 @@ class CustomDataset(Dataset):
         return len(self.data_frame)
     
     def normalize_gray(self, image):
-        normalized_image = image / 255.0
+        normalized_image = image / 255
         return normalized_image
     def normalize_lab(self, lab_image):
         lab_image[..., 0] = (lab_image[..., 0] * 100) / 255
@@ -67,10 +67,10 @@ class CustomDataset(Dataset):
             image_color = cv2.resize(image_color, self.resize)
 
         # Convert the color image to Lab color space
-        image_lab = cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab)
+        image_lab = np.float32(cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab))
 
         # Load the image in grayscale
-        image_gray = cv2.cvtColor(image_color, cv2.COLOR_BGR2GRAY)
+        image_gray = np.float32(cv2.cvtColor(image_color, cv2.COLOR_BGR2GRAY))
 
         # # Apply transformations if provided
         if self.transform:
@@ -79,10 +79,12 @@ class CustomDataset(Dataset):
 
         # Convert numpy arrays to tensors
         image_lab_tensor = (
-            torch.from_numpy(image_lab).permute(2, 0, 1).float()
+            #torch.from_numpy(image_lab).permute(2, 0, 1).float()
+            #torch.from_numpy(image_lab).float()
+            torch.tensor(image_lab).permute(2, 0, 1)
         )  # Reorder dimensions for Lab
         image_gray_tensor = (
-            torch.from_numpy(image_gray).unsqueeze(0).float()
+            torch.tensor(image_gray).unsqueeze(0)
         )  # Add channel dimension for grayscale
 
         return image_lab_tensor, image_gray_tensor

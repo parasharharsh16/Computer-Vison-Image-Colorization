@@ -32,7 +32,7 @@ def write_images_to_csv_with_pandas(base_path, csv_filename):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, dataframe, transform=None, resize=None):
+    def __init__(self, dataframe, transform=True, resize=None):
         """
         Args:
             dataframe (DataFrame): DataFrame containing the image paths.
@@ -45,7 +45,14 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.data_frame)
-
+    
+    def normalize_gray(self, image):
+        normalized_image = image / 255
+        return normalized_image
+    def normalize_lab(self, lab_image):
+        lab_image[..., 0] = (lab_image[..., 0] * 100) / 255
+        lab_image[..., 1:] = lab_image[..., 1:] - 128
+        return lab_image
     def __getitem__(self, idx):
         img_path = self.data_frame.iloc[idx, 0]
 
@@ -55,36 +62,29 @@ class CustomDataset(Dataset):
             raise FileNotFoundError(
                 f"The image at path {img_path} could not be loaded."
             )
-
-        # Resize the color image if resize dimensions are provided
+        # Resize the grayscale image if resize dimensions are provided
         if self.resize:
             image_color = cv2.resize(image_color, self.resize)
 
         # Convert the color image to Lab color space
-        image_lab = cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab)
+        image_lab = np.float32(cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab))
 
         # Load the image in grayscale
-        image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        if image_gray is None:
-            raise FileNotFoundError(
-                f"The image at path {img_path} could not be loaded."
-            )
+        image_gray = np.float32(cv2.cvtColor(image_color, cv2.COLOR_BGR2GRAY))
 
-        # Resize the grayscale image if resize dimensions are provided
-        if self.resize:
-            image_gray = cv2.resize(image_gray, self.resize)
-
-        # Apply transformations if provided
+        # # Apply transformations if provided
         if self.transform:
-            image_lab = self.transform(image_lab)
-            image_gray = self.transform(image_gray)
+            image_lab = self.normalize_lab(image_lab)
+            image_gray = self.normalize_gray(image_gray)
 
         # Convert numpy arrays to tensors
         image_lab_tensor = (
-            torch.from_numpy(image_lab).permute(2, 0, 1).float()
+            #torch.from_numpy(image_lab).permute(2, 0, 1).float()
+            #torch.from_numpy(image_lab).float()
+            torch.tensor(image_lab).permute(2, 0, 1)
         )  # Reorder dimensions for Lab
         image_gray_tensor = (
-            torch.from_numpy(image_gray).unsqueeze(0).float()
+            torch.tensor(image_gray).unsqueeze(0)
         )  # Add channel dimension for grayscale
 
         return image_lab_tensor, image_gray_tensor
@@ -121,16 +121,16 @@ def sample_data(file_path, data_type, sample_percentage):
     return final_data
 
 
-if __name__ == "__main__":
-    write_images_to_csv_with_pandas(data_dir, csv_path)
-    if not os.path.exists(csv_path):
-        raise Exception("csv file with paths are not present")
-    train_df = sample_data(csv_path, "train", data_percentage)
-    val_df = sample_data(csv_path, "train", data_percentage)
-    # test_df = sample_data(csv_path, "train", data_percentage)
-    train_dataset = CustomDataset(train_df, resize=image_shape)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    print("ok")
+# if __name__ == "__main__":
+#     write_images_to_csv_with_pandas(data_dir, csv_path)
+#     if not os.path.exists(csv_path):
+#         raise Exception("csv file with paths are not present")
+#     train_df = sample_data(csv_path, "train", data_percentage)
+#     val_df = sample_data(csv_path, "train", data_percentage)
+#     # test_df = sample_data(csv_path, "train", data_percentage)
+#     train_dataset = CustomDataset(train_df, resize=image_shape)
+#     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+#     print("ok")
     # val_dataset = CustomDataset(
     #     val_df,
     #     resize=image_shape,

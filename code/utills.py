@@ -7,6 +7,9 @@ from tqdm import tqdm # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.color import lab2rgb
+import numpy as np
+from sklearn.metrics import auc
+
 class GrayscaleToColorCNN(nn.Module):
     def __init__(self, in_channels=1, out_channels=2):
         super(GrayscaleToColorCNN, self).__init__()
@@ -188,17 +191,6 @@ def plot_images(inputimg, targetimg, predictedimg):
 
 
 def weighted_multinomial_cross_entropy(output, target, weights):
-    """
-    Calculate the weighted multinomial cross-entropy loss.
-
-    Args:
-        output (torch.Tensor): The predicted probabilities for each class, shape (batch_size, H, W, Q)
-        target (torch.Tensor): The ground truth probabilities, shape (batch_size, H, W, Q)
-        weights (torch.Tensor): Weight for each class in the quantized ab space, shape (Q,)
-
-    Returns:
-        torch.Tensor: The weighted cross-entropy loss.
-    """
     # Log of probabilities to prevent numerical instability
     log_probs = torch.log(output.clamp(min=1e-5))
 
@@ -218,3 +210,40 @@ def weighted_multinomial_cross_entropy(output, target, weights):
     # Average over all pixels and batch size
     return -weighted_loss.mean()
 
+def calculate_auc_accuracy_plot_roc(target_lab_images, predicted_lab_images, threshold):
+    # Calculate errors in the AB space
+    ab_error = np.linalg.norm(target_lab_images[..., 1:] - predicted_lab_images[..., 1:], axis=-1)
+    
+    # Flatten the errors
+    ab_error_flat = ab_error.flatten()
+    
+    # Calculate accuracy
+    correct_predictions = np.sum(ab_error_flat <= threshold)
+    total_predictions = len(ab_error_flat)
+    accuracy = correct_predictions / total_predictions
+    
+    # Sort the errors
+    sorted_indices = np.argsort(ab_error_flat)
+    sorted_ab_error = ab_error_flat[sorted_indices]
+    
+    # Calculate the cumulative distribution function
+    cdf = np.cumsum(sorted_ab_error) / np.sum(sorted_ab_error)
+    
+    # Calculate the AUC
+    auc_score = auc(sorted_ab_error, cdf)
+    
+    # Plot the ROC curve
+    plt.figure()
+    plt.plot(sorted_ab_error, cdf, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % auc_score)
+    plt.xlabel('AB Error')
+    plt.ylabel('Cumulative Distribution Function')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc="lower right")
+    plt.show()
+    
+    return auc_score, accuracy
+
+##USe of Evaluation Function
+# auc_score, accuracy = calculate_auc_accuracy_plot_roc(target_lab_tensor, predicted_lab_tensor, threshold)
+# print("AUC:", auc_score)
+# print("Accuracy:", accuracy)

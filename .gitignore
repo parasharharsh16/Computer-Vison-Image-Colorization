@@ -1,2 +1,4 @@
 .venv/
 data/
+model/
+code/__pycache__/

@@ -42,21 +42,45 @@ class GrayscaleToColorCNN(nn.Module):
         x = self.decoder(x)
         return x
 
-class ClassBalancedLoss(nn.Module):
-    def __init__(self, weights, reduction='mean'):
-        super(ClassBalancedLoss, self).__init__()
-        self.weights = weights.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
-        self.reduction = reduction
+#class ClassBalancedLoss(nn.Module):
+ #   def __init__(self, weights, reduction='mean'):
+#        super(ClassBalancedLoss, self).__init__()
+  #      self.weights = weights.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+  #      self.reduction = reduction
 
-    def forward(self, output, target):
+  #  def forward(self, output, target):
         # Calculate per-pixel loss
-        loss = F.mse_loss(output, target, reduction=self.reduction)
+   #     loss = F.mse_loss(output, target, reduction=self.reduction)
 
         # Apply class rebalancing weights
-        if self.weights is not None:
-            loss = loss * self.weights
+   #     if self.weights is not None:
+   #         loss = loss * self.weights
 
-        return loss
+  #      return loss
+
+
+class ClassBalancedLoss(nn.Module):
+    def __init__(self, weights=None, lambda_l2=0.5):
+        super(ClassBalancedLoss, self).__init__()
+        self.weights = weights.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu')) if weights is not None else None
+        self.lambda_l2 = lambda_l2
+
+    def forward(self, pred_prob, pred_ab, true_ab):
+        # Classification loss (Cross-Entropy)
+        ce_loss = F.cross_entropy(pred_prob, true_ab, reduction='mean')
+
+        # Regression loss (L2)
+        l2_loss = F.mse_loss(pred_ab, true_ab, reduction='mean')
+
+        # Apply class rebalancing weights if provided
+        if self.weights is not None:
+            ce_loss = ce_loss * self.weights
+
+        # Combine classification and regression losses
+        total_loss = ce_loss + self.lambda_l2 * l2_loss
+
+        return total_loss
+
 
 def create_color_weights(quantized_ab_space, image_net_data, lambda_=0.5, sigma=5):
 

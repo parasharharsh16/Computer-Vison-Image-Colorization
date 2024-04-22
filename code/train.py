@@ -55,15 +55,16 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 # write criterion using torch
 
 criterion = torch.nn.MSELoss()
+# criterion = ClassBalancedLoss()
 # Example usage
 # Assuming 'preds' is the output from your network, 'true' is the soft-encoded ground truth,
 # and 'weights' is the class weighting factor obtained from the training data analysis.
 # preds, true, and weights should all be torch Tensors.
 
 # Train the model
-model = train_model(
-    model, train_loader, optimizer, batch_size, num_epochs, device, criterion
-)
+# model = train_model(
+#     model, train_loader, optimizer, batch_size, num_epochs, device, criterion
+# )
 model.load_state_dict(torch.load("model/model.pth"))
 test_output = predict(model, test_loader, device)
 

@@ -201,7 +201,7 @@ class ECCVGenerator(BaseColor):
         self.model_out = nn.Conv2d(
             313, 2, kernel_size=1, padding=0, dilation=1, stride=1, bias=False
         )
-        # self.upsample4 = nn.Upsample(scale_factor=4, mode="bilinear")
+        self.upsample4 = nn.Upsample(scale_factor=4, mode="bilinear")
 
     def forward(self, input_l):
         conv1_2 = self.model1(self.normalize_l(input_l))
@@ -213,11 +213,11 @@ class ECCVGenerator(BaseColor):
         conv7_3 = self.model7(conv6_3)
         conv8_3 = self.model8(conv7_3)
         out_reg = self.model_out(self.softmax(conv8_3))
-        upsampled = F.interpolate(
-            out_reg, size=image_shape, mode="bilinear", align_corners=False
-        )
-        # return self.unnormalize_ab(self.upsample4(out_reg))
-        return self.unnormalize_ab(upsampled)
+        # upsampled = F.interpolate(
+        #     out_reg, size=image_shape, mode="bilinear", align_corners=False
+        # )
+        return self.unnormalize_ab(self.upsample4(out_reg))
+        # return self.unnormalize_ab(upsampled)
 
 
 def eccv16(pretrained=True):

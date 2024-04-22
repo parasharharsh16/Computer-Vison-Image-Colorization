@@ -51,23 +51,74 @@ class GrayscaleToColorCNN(nn.Module):
         return x
 
 
+# class ClassBalancedLoss(nn.Module):
+#     def __init__(self, weights, reduction="mean"):
+#         super(ClassBalancedLoss, self).__init__()
+#         self.weights = weights.to(
+#             torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#         )
+#         self.reduction = reduction
+
+#     def forward(self, output, target):
+#         # Calculate per-pixel loss
+#         loss = F.mse_loss(output, target, reduction=self.reduction)
+
+#         # Apply class rebalancing weights
+#         if self.weights is not None:
+#             loss = loss * self.weights
+
+#         return loss
+
+
 class ClassBalancedLoss(nn.Module):
-    def __init__(self, weights, reduction="mean"):
-        super(ClassBalancedLoss, self).__init__()
-        self.weights = weights.to(
-            torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        )
-        self.reduction = reduction
+    def _init_(self, class_weights=None):
+        super(ClassBalancedLoss, self)._init_()
+        self.class_weights = class_weights
 
-    def forward(self, output, target):
-        # Calculate per-pixel loss
-        loss = F.mse_loss(output, target, reduction=self.reduction)
+    def calculate_batch_class_weights(self, target):
+        # Quantize the ab channels into bins. Assume image_ab_batches is a batch of ab channel images with shape (batch_size, height, width, 2)
+        image_ab_batches = target
+        a = image_ab_batches[..., 0]
+        b = image_ab_batches[..., 1]
 
-        # Apply class rebalancing weights
-        if self.weights is not None:
-            loss = loss * self.weights
+        # Define bins
+        bins = torch.arange(-128, 128, 8).to(a.device)
 
-        return loss
+        # Digitize a and b channels into bins
+        a_bins = torch.bucketize(a, bins, right=True)
+        b_bins = torch.bucketize(b, bins, right=True)
+
+        # Combine the a and b bins to get a single label for each pixel
+        y_true = a_bins * 256 + b_bins
+
+        # Flatten y_true and calculate max value for creating bincount tensor
+        y_true_flat = y_true.flatten()
+        max_val = y_true_flat.max() + 1
+
+        # Count the number of pixels of each class in all batches
+        class_counts = torch.bincount(y_true_flat, minlength=max_val.item())
+
+        # Compute the class weights
+        class_weights = 1.0 / (class_counts.float() + 1e-5)
+
+        return class_weights
+
+    def forward(self, pred, target):
+        # Apply softmax to the predicted output to get a distribution
+        pred = F.softmax(pred, dim=1)
+
+        # Apply log to the predicted distribution
+        pred = torch.log(pred)
+
+        # Multiply the target with the log of predicted distribution
+        # loss = -1 * torch.sum(target * pred, dim=1)
+
+        # # Apply class weights if provided
+        class_weights = self.calculate_batch_class_weights(target)
+        # loss = loss * class_weights
+
+        # Return the mean loss
+        return torch.mean(loss)
 
 
 def create_color_weights(quantized_ab_space, image_net_data, lambda_=0.5, sigma=5):
@@ -179,7 +230,7 @@ def train_model(
 
             # Forward pass
             outputs = model(tens_rs_l)
-            output_with_L = torch.cat((tens_rs_l, outputs), dim=1)
+            # output_with_L = torch.cat((tens_rs_l, outputs), dim=1)
             # Calculate loss with class rebalancing
             # output_lab_img = recreate_image_tensor(tens_rs_l, outputs, mode="bilinear")
             # target_ab_channels = targets[:, 1:, :, :]
@@ -190,7 +241,7 @@ def train_model(
             # )  # Random weights for each class
             # weights = weights.to(device)
 
-            loss = criterion(output_with_L, tensor_rs_img)
+            loss = criterion(outputs, tens_rs_ab)
             # loss = multinomial_cross_entropy_loss(output_with_L, tensor_rs_img)
 
             # Backward pass and update weights

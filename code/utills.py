@@ -218,7 +218,9 @@ def train_model(
 
 def predict(model, test_loader, device):
     model.eval()  # Set model to evaluation mode
-    output_images = []
+    accuracy_lst = []
+    auc_lst = []
+    print_output = []
     with torch.no_grad():
         for i, (tens_rs_l, tens_rs_ab, tensor_rs_img) in enumerate(test_loader):
             tens_rs_l = tens_rs_l.to(device).float()
@@ -226,9 +228,23 @@ def predict(model, test_loader, device):
             tensor_rs_img = tensor_rs_img.to(device).float()
             # Forward pass
             outputs = model(tens_rs_l)
-            output_with_L = torch.cat((tens_rs_l, outputs), dim=1)
-            output_images.append([tens_rs_l[0], tensor_rs_img[0], output_with_L[0]])
-    return output_images
+            output_with_L = torch.cat((tens_rs_l, outputs*5), dim=1)
+            print_output.append((tens_rs_l[0], tensor_rs_img[0], output_with_L[0]))
+
+            output_with_L_np = (
+                output_with_L[0].permute((1, 2, 0)).detach().cpu().numpy()
+            )
+            tensor_rs_img_np = (
+                tensor_rs_img[0].permute((1, 2, 0)).detach().cpu().numpy()
+            )
+            auc, accuracy = calculate_auc_accuracy_plot_roc(
+                tensor_rs_img_np, output_with_L_np
+            )
+            auc_lst.append(auc)
+            accuracy_lst.append(accuracy)
+            # output_images.append(output_with_L.detach().cpu().numpy())
+            # target_images.append(tensor_rs_img.detach().cpu().numpy())
+    return print_output, accuracy_lst, auc_lst
 
 
 def denormalize_lab_image(lab_image_normalized):
@@ -281,6 +297,7 @@ def plot_images(inputimg, targetimg, predictedimg):
     plt.savefig("TestImage.jpg")
     plt.show()
 
+
 def weighted_multinomial_cross_entropy(output, target, weights):
     # Log of probabilities to prevent numerical instability
     log_probs = torch.log(output.clamp(min=1e-5))
@@ -301,38 +318,50 @@ def weighted_multinomial_cross_entropy(output, target, weights):
     # Average over all pixels and batch size
     return -weighted_loss.mean()
 
-def calculate_auc_accuracy_plot_roc(target_lab_images, predicted_lab_images, threshold):
+
+def calculate_auc_accuracy_plot_roc(
+    target_lab_images, predicted_lab_images, threshold=0.8
+):
     # Calculate errors in the AB space
-    ab_error = np.linalg.norm(target_lab_images[..., 1:] - predicted_lab_images[..., 1:], axis=-1)
-    
+    ab_error = np.linalg.norm(
+        target_lab_images[..., 1:] - predicted_lab_images[..., 1:], axis=-1
+    )
+
     # Flatten the errors
     ab_error_flat = ab_error.flatten()
-    
+
     # Calculate accuracy
     correct_predictions = np.sum(ab_error_flat <= threshold)
     total_predictions = len(ab_error_flat)
     accuracy = correct_predictions / total_predictions
-    
+
     # Sort the errors
     sorted_indices = np.argsort(ab_error_flat)
     sorted_ab_error = ab_error_flat[sorted_indices]
-    
+
     # Calculate the cumulative distribution function
     cdf = np.cumsum(sorted_ab_error) / np.sum(sorted_ab_error)
-    
+
     # Calculate the AUC
     auc_score = auc(sorted_ab_error, cdf)
-    
+
     # Plot the ROC curve
-    plt.figure()
-    plt.plot(sorted_ab_error, cdf, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % auc_score)
-    plt.xlabel('AB Error')
-    plt.ylabel('Cumulative Distribution Function')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
-    plt.legend(loc="lower right")
-    plt.show()
-    
+    # plt.figure()
+    # plt.plot(
+    #     sorted_ab_error,
+    #     cdf,
+    #     color="darkorange",
+    #     lw=2,
+    #     label="ROC curve (area = %0.2f)" % auc_score,
+    # )
+    # plt.xlabel("AB Error")
+    # plt.ylabel("Cumulative Distribution Function")
+    # plt.title("Receiver Operating Characteristic (ROC) Curve")
+    # plt.legend(loc="lower right")
+    # plt.show()
+
     return auc_score, accuracy
+
 
 ##USe of Evaluation Function
 # auc_score, accuracy = calculate_auc_accuracy_plot_roc(target_lab_tensor, predicted_lab_tensor, threshold)

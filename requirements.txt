@@ -7,3 +7,5 @@ torch
 torchvision
 torchaudio
 tqdm
+scikit-learn
+scikit-image

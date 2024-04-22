@@ -2,9 +2,12 @@ import os
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
+from skimage import color
 import torch
 import cv2
 from constants import data_dir, csv_path, data_percentage, mode, image_shape
+import torch.nn.functional as F
+from PIL import Image
 
 
 # Recursive function to find .jpg and .png files.
@@ -32,7 +35,7 @@ def write_images_to_csv_with_pandas(base_path, csv_filename):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, dataframe, transform=None, resize=None):
+    def __init__(self, dataframe, transform=False, size: tuple[int, int] = None):
         """
         Args:
             dataframe (DataFrame): DataFrame containing the image paths.
@@ -41,53 +44,64 @@ class CustomDataset(Dataset):
         """
         self.data_frame = dataframe
         self.transform = transform
-        self.resize = resize
+        self.size = size
 
     def __len__(self):
         return len(self.data_frame)
+
+    def load_img(self, img_path):
+        out_np = np.asarray(Image.open(img_path))
+        if out_np.ndim == 2:
+            out_np = np.tile(out_np[:, :, None], 3)
+        return out_np
+
+    def resize_img(self, img, HW, resample=3):
+        return np.asarray(
+            Image.fromarray(img).resize((HW[1], HW[0]), resample=resample)
+        )
 
     def __getitem__(self, idx):
         img_path = self.data_frame.iloc[idx, 0]
 
         # Load the image in color
-        image_color = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        if image_color is None:
-            raise FileNotFoundError(
-                f"The image at path {img_path} could not be loaded."
-            )
-
-        # Resize the color image if resize dimensions are provided
-        if self.resize:
-            image_color = cv2.resize(image_color, self.resize)
-
-        # Convert the color image to Lab color space
-        image_lab = cv2.cvtColor(image_color, cv2.COLOR_BGR2Lab)
-
-        # Load the image in grayscale
-        image_gray = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        if image_gray is None:
-            raise FileNotFoundError(
-                f"The image at path {img_path} could not be loaded."
-            )
-
+        image_color = self.load_img(img_path)
         # Resize the grayscale image if resize dimensions are provided
-        if self.resize:
-            image_gray = cv2.resize(image_gray, self.resize)
+        if self.size:
+            image_color_rs = self.resize_img(image_color, HW=self.size)
+        else:
+            image_color_rs = image_color
 
-        # Apply transformations if provided
-        if self.transform:
-            image_lab = self.transform(image_lab)
-            image_gray = self.transform(image_gray)
+        # image_lab = color.rgb2lab(image_color)
+        image_lab_rs = color.rgb2lab(image_color_rs)
 
-        # Convert numpy arrays to tensors
-        image_lab_tensor = (
-            torch.from_numpy(image_lab).permute(2, 0, 1).float()
-        )  # Reorder dimensions for Lab
-        image_gray_tensor = (
-            torch.from_numpy(image_gray).unsqueeze(0).float()
-        )  # Add channel dimension for grayscale
+        # img_l = image_lab[:, :, 0]
+        img_l_rs = image_lab_rs[:, :, 0]
+        img_ab_rs = image_lab_rs[:, :, 1:]
 
-        return image_lab_tensor, image_gray_tensor
+        # tens_l = torch.Tensor(img_l)[None, None, :, :]
+        tens_rs_l = torch.Tensor(img_l_rs)[None, :, :]
+        tens_rs_ab = torch.Tensor(img_ab_rs).permute(2, 0, 1)
+
+        tensor_img = torch.from_numpy(image_lab_rs).permute(2, 0, 1)
+
+        return tens_rs_l, tens_rs_ab, tensor_img
+
+
+def recreate_image_tensor(tens_l, out_ab, mode="bilinear"):
+    # tens_orig_l 	1 x 1 x H_orig x W_orig
+    # out_ab 		1 x 2 x H x W
+
+    HW_orig = tens_l.shape[2:]
+    HW = out_ab.shape[2:]
+
+    # call resize function if needed
+    if HW_orig[0] != HW[0] or HW_orig[1] != HW[1]:
+        out_ab_orig = F.interpolate(out_ab, size=HW_orig, mode=mode)
+    else:
+        out_ab_orig = out_ab
+
+    out_lab_orig = torch.cat((tens_l, out_ab_orig), dim=1)
+    return out_lab_orig
 
 
 def sample_data(file_path, data_type, sample_percentage):
@@ -121,23 +135,34 @@ def sample_data(file_path, data_type, sample_percentage):
     return final_data
 
 
-if __name__ == "__main__":
-    write_images_to_csv_with_pandas(data_dir, csv_path)
-    if not os.path.exists(csv_path):
-        raise Exception("csv file with paths are not present")
-    train_df = sample_data(csv_path, "train", data_percentage)
-    val_df = sample_data(csv_path, "train", data_percentage)
-    # test_df = sample_data(csv_path, "train", data_percentage)
-    train_dataset = CustomDataset(train_df, resize=image_shape)
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    print("ok")
-    # val_dataset = CustomDataset(
-    #     val_df,
-    #     resize=image_shape,
-    # )
-    # val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True)
-    # test_dataset = CustomDataset(
-    #     test_df,
-    #     resize=image_shape,
-    # )
-    # test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+# def custom_collate_fn(batch):
+
+#     tens_l = [
+#         item[0] for item in batch
+#     ]  # Extract data (could be tensors of different sizes)
+#     # tens_rs_l = [item[1] for item in batch]
+#     # tensor_img = [item[2] for item in batch]  # Extract labels if you have them
+
+#     return tens_l, tens_rs_l, tensor_img  # Or just return data if you don't have labels
+
+
+# if __name__ == "__main__":
+#     write_images_to_csv_with_pandas(data_dir, csv_path)
+#     if not os.path.exists(csv_path):
+#         raise Exception("csv file with paths are not present")
+#     train_df = sample_data(csv_path, "train", data_percentage)
+#     val_df = sample_data(csv_path, "train", data_percentage)
+#     # test_df = sample_data(csv_path, "train", data_percentage)
+#     train_dataset = CustomDataset(train_df, resize=image_shape)
+#     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+#     print("ok")
+# val_dataset = CustomDataset(
+#     val_df,
+#     resize=image_shape,
+# )
+# val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True)
+# test_dataset = CustomDataset(
+#     test_df,
+#     resize=image_shape,
+# )
+# test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=True)

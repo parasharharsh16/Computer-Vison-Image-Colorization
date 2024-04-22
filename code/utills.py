@@ -72,33 +72,33 @@ class ClassBalancedLoss(nn.Module):
         super(ClassBalancedLoss, self)._init_()
         self.class_weights = class_weights
 
-    def calculate_batch_class_weights(self, target):
-        # Quantize the ab channels into bins. Assume image_ab_batches is a batch of ab channel images with shape (batch_size, height, width, 2)
-        image_ab_batches = target
-        a = image_ab_batches[..., 0]
-        b = image_ab_batches[..., 1]
+    # def calculate_batch_class_weights(self, target):
+    #     # Quantize the ab channels into bins. Assume image_ab_batches is a batch of ab channel images with shape (batch_size, height, width, 2)
+    #     image_ab_batches = target
+    #     a = image_ab_batches[..., 0]
+    #     b = image_ab_batches[..., 1]
 
-        # Define bins
-        bins = torch.arange(-128, 128, 8).to(a.device)
+    #     # Define bins
+    #     bins = torch.arange(-128, 128, 8).to(a.device)
 
-        # Digitize a and b channels into bins
-        a_bins = torch.bucketize(a, bins, right=True)
-        b_bins = torch.bucketize(b, bins, right=True)
+    #     # Digitize a and b channels into bins
+    #     a_bins = torch.bucketize(a, bins, right=True)
+    #     b_bins = torch.bucketize(b, bins, right=True)
 
-        # Combine the a and b bins to get a single label for each pixel
-        y_true = a_bins * 256 + b_bins
+    #     # Combine the a and b bins to get a single label for each pixel
+    #     y_true = a_bins * 256 + b_bins
 
-        # Flatten y_true and calculate max value for creating bincount tensor
-        y_true_flat = y_true.flatten()
-        max_val = y_true_flat.max() + 1
+    #     # Flatten y_true and calculate max value for creating bincount tensor
+    #     y_true_flat = y_true.flatten()
+    #     max_val = y_true_flat.max() + 1
 
-        # Count the number of pixels of each class in all batches
-        class_counts = torch.bincount(y_true_flat, minlength=max_val.item())
+    #     # Count the number of pixels of each class in all batches
+    #     class_counts = torch.bincount(y_true_flat, minlength=max_val.item())
 
-        # Compute the class weights
-        class_weights = 1.0 / (class_counts.float() + 1e-5)
+    #     # Compute the class weights
+    #     class_weights = 1.0 / (class_counts.float() + 1e-5)
 
-        return class_weights
+    #     return class_weights
 
     def forward(self, pred, target):
         # Apply softmax to the predicted output to get a distribution
@@ -228,7 +228,7 @@ def predict(model, test_loader, device):
             tensor_rs_img = tensor_rs_img.to(device).float()
             # Forward pass
             outputs = model(tens_rs_l)
-            output_with_L = torch.cat((tens_rs_l, outputs*5), dim=1)
+            output_with_L = torch.cat((tens_rs_l, outputs * 5), dim=1)
             print_output.append((tens_rs_l[0], tensor_rs_img[0], output_with_L[0]))
 
             output_with_L_np = (
@@ -367,4 +367,3 @@ def calculate_auc_accuracy_plot_roc(
 # auc_score, accuracy = calculate_auc_accuracy_plot_roc(target_lab_tensor, predicted_lab_tensor, threshold)
 # print("AUC:", auc_score)
 # print("Accuracy:", accuracy)
-

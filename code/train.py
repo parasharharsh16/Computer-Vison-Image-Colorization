@@ -3,7 +3,7 @@ from utills import (
     predict,
     plot_images,
     calculate_auc_accuracy_plot_roc,
-    # ClassBalancedLoss,
+    ClassBalancedLoss,
 )
 import torch
 import os
@@ -55,8 +55,8 @@ model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 # ClassBalancedLoss with pre-calculated weights
-criterion = torch.nn.MSELoss()
-# criterion = ClassBalancedLoss()
+# criterion = torch.nn.MSELoss()
+criterion = ClassBalancedLoss()
 
 # Train the model
 # model = train_model(

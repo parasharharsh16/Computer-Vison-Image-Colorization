@@ -1,14 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import cv2
-
-# import tqdm
 from tqdm import tqdm  # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage import color
-from dataprep import recreate_image_tensor
 
 
 class GrayscaleToColorCNN(nn.Module):
@@ -111,10 +107,10 @@ class ClassBalancedLoss(nn.Module):
         pred = torch.log(pred)
 
         # Multiply the target with the log of predicted distribution
-        # loss = -1 * torch.sum(target * pred, dim=1)
+        loss = -1 * torch.sum(target * pred, dim=1)
 
         # # Apply class weights if provided
-        class_weights = self.calculate_batch_class_weights(target)
+        # class_weights = self.calculate_batch_class_weights(target)
         # loss = loss * class_weights
 
         # Return the mean loss
@@ -191,36 +187,10 @@ def weighted_multinomial_cross_entropy(output, target, weights):
     return -weighted_loss.mean()
 
 
-def multinomial_cross_entropy_loss(Z_hat, Z):
-    """
-    Standard multinomial cross-entropy loss.
-    :param Z_hat: Predicted probability distributions (N, H, W, Q)
-    :param Z: Target distributions (N, H, W, Q)
-    :return: Cross-entropy loss
-    """
-    # Flatten the tensors to simplify the loss calculation
-    Z_hat_flat = Z_hat.view(-1, Z_hat.shape[-1])  # (N*H*W, Q)
-    Z_flat = Z.view(-1, Z.shape[-id])  # (N*H*W, Q)
-
-    # Compute log probabilities
-    log_prob = torch.log(Z_hat_flat + 1e-8)  # add a small number to prevent log(0)
-
-    # Compute the cross-entropy
-    loss = -torch.sum(
-        Z_flat * log_prob, dim=1
-    )  # element-wise multiplication and sum over Q
-
-    # Return the mean of the loss across all pixels
-    return torch.mean(loss)
-
-
 def train_model(
     model, train_loader, optimizer, batch_size, num_epochs, device, criterion
 ):
-
     model.train()  # Set model to training mode
-
-    log_interval = len(train_loader)
     for epoch in range(num_epochs):
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader))
         for i, (tens_rs_l, tens_rs_ab, tensor_rs_img) in progress_bar:
@@ -231,18 +201,7 @@ def train_model(
             # Forward pass
             outputs = model(tens_rs_l)
             # output_with_L = torch.cat((tens_rs_l, outputs), dim=1)
-            # Calculate loss with class rebalancing
-            # output_lab_img = recreate_image_tensor(tens_rs_l, outputs, mode="bilinear")
-            # target_ab_channels = targets[:, 1:, :, :]
-            # loss = criterion(outputs, tens_rs_ab)
-            # H, W, Q = 150, 150, 2
-            # weights = torch.rand(
-            #     Q, dtype=torch.float32
-            # )  # Random weights for each class
-            # weights = weights.to(device)
-
             loss = criterion(outputs, tens_rs_ab)
-            # loss = multinomial_cross_entropy_loss(output_with_L, tensor_rs_img)
 
             # Backward pass and update weights
             optimizer.zero_grad()
@@ -252,9 +211,6 @@ def train_model(
             progress_bar.set_description(
                 f"Epoch {epoch+1} Iter {i+1}: loss {loss.item():.5f}"
             )
-            # Print training progress (optional)
-            # if (i + 1) % log_interval == 0:
-            #     print(f'Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {loss.item():.4f}')
     torch.save(model.state_dict(), "model/model.pth")
     return model
 
@@ -270,9 +226,7 @@ def predict(model, test_loader, device):
             # Forward pass
             outputs = model(tens_rs_l)
             output_with_L = torch.cat((tens_rs_l, outputs), dim=1)
-            # output_with_L = torch.zeros_like(images)
             output_images.append([tens_rs_l[0], tensor_rs_img[0], output_with_L[0]])
-            break
     return output_images
 
 
@@ -310,8 +264,6 @@ def plot_images(inputimg, targetimg, predictedimg):
 
     # Plot target image
     target_img = targetimg.permute((1, 2, 0)).detach().cpu().numpy()
-    # target_img = denormalize_lab_image(target_img)
-    # target_rgb = cv2.cvtColor(target_img, cv2.COLOR_LAB2RGB)
     target_rgb = color.lab2rgb(target_img)
     axes[1].imshow(target_rgb)
     axes[1].set_title("Target Image")
@@ -319,8 +271,6 @@ def plot_images(inputimg, targetimg, predictedimg):
 
     # Plot predicted image
     predict_img = predictedimg.permute((1, 2, 0)).detach().cpu().numpy()
-    # predict_img = denormalize_lab_image(predict_img)
-    # predicted_rgb = predict_img  # cv2.cvtColor(predict_img, cv2.COLOR_LAB2RGB)
     predicted_rgb = color.lab2rgb(predict_img)
     axes[2].imshow(predicted_rgb)
     axes[2].set_title("Predicted Image")
